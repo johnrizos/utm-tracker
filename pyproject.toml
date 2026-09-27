@@ -1,0 +1,55 @@
+[project]
+name = "utm-tracker"
+version = "0.1.0"
+description = "UTM link builder and click tracker with bot filtering, built on FastAPI"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20",
+    "fastapi>=0.141",
+    "psycopg[binary]>=3.3",
+    "pydantic-settings>=2.15",
+    "sqlalchemy>=2.1",
+    "uvicorn[standard]>=0.54",
+]
+
+[project.scripts]
+utm-tracker = "utm_tracker.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13",
+    "mypy>=2.3",
+    "pytest>=9.1",
+    "ruff>=0.16",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "S", "DTZ"]
+ignore = ["B008"]  # FastAPI's Depends() in defaults is the intended pattern
+
+[tool.ruff.lint.isort]
+known-first-party = ["utm_tracker"]
+# The local alembic/ folder holds migrations; the import is the library.
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "E501"]  # long user-agent strings are test data
+"alembic/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
