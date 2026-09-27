@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: utm
+          POSTGRES_PASSWORD: utm
+          POSTGRES_DB: utm_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U utm" --health-interval 2s --health-timeout 3s --health-retries 15
+    env:
+      TEST_DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql+psycopg://utm:utm@localhost:5432/utm_test' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --locked
+      - run: uv run pytest
+
+  docker:
+    needs: [checks, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start the stack
+        run: docker compose up -d --build --wait
+      - name: Smoke test
+        run: |
+          KEY=$(docker compose exec -T api utm-tracker create-key ci | tail -1)
+          CODE=$(curl -fs -X POST localhost:8000/api/links -H "X-API-Key: $KEY" -H 'content-type: application/json' \
+            -d '{"destination_url":"https://example.com","utm_source":"ci","utm_medium":"test","utm_campaign":"smoke"}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["code"])')
+          curl -fs -o /dev/null -w '%{http_code}\n' localhost:8000/r/$CODE | grep -q 302
+          curl -fs localhost:8000/api/links/$CODE -H "X-API-Key: $KEY"
+      - name: Logs
+        if: failure()
+        run: docker compose logs

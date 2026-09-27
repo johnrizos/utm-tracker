@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: utm
+      POSTGRES_PASSWORD: utm
+      POSTGRES_DB: utm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U utm"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      UTM_DATABASE_URL: postgresql+psycopg://utm:utm@db:5432/utm
+      UTM_BASE_URL: http://localhost:8000
+      # Any long random string; changing it resets unique-visitor counting.
+      UTM_VISITOR_SECRET: ${UTM_VISITOR_SECRET:-local-development-only}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
